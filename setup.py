@@ -20,13 +20,12 @@ Documentation
 -------------
 
 The full documentation is at http://leicaautomator.rtfd.org."""
-history = open('HISTORY.rst').read().replace('.. :changelog:', '')
 
 setup(
     name='leicaautomator',
     version='0.0.1',
     description='Automate scans on Leica SPX microscopes',
-    long_description=readme + '\n\n' + doclink + '\n\n' + history,
+    long_description=readme + '\n\n' + doclink,
     author='Arve Seljebu',
     author_email='arve.seljebu@gmail.com',
     url='https://github.com/arve0/leicaautomator',
