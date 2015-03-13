@@ -1,1 +1,3 @@
 wheel>=0.22
+-r docs/requirements.txt
+-e .

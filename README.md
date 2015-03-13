@@ -2,6 +2,8 @@
 
 [![build-status-image]][travis]
 [![pypi-version]][pypi]
+[![wheel]][pypi]
+
 
 ## Overview
 
@@ -23,30 +25,25 @@ pip install leicaautomator
 
 TODO: Write example.
 
-## Testing
-
-Install testing requirements:
-
+## Development
+Install dependencies and link development version of leicaautomator to pip:
 ```bash
-pip install tox
+git clone https://github.com/arve0/leicaautomator
+cd leicaautomator
+pip install -r requirements.txt
 ```
 
-Run:
-
+#### run test
 ```bash
 tox
 ```
 
-## Documentation
-
-To build the documentation, you'll need sphinx:
-
+#### extra output, jump into pdb upon error
 ```bash
-pip install -r docs/requirements.txt
+tox -- -s --pdb
 ```
 
-To build the documentation:
-
+#### build api reference
 ```bash
 make docs
 ```
@@ -56,3 +53,4 @@ make docs
 [travis]: http://travis-ci.org/arve0/leicaautomator?branch=master
 [pypi-version]: https://pypip.in/version/leicaautomator/badge.svg
 [pypi]: https://pypi.python.org/pypi/leicaautomator
+[wheel]: https://pypip.in/wheel/leicaautomator/badge.svg
