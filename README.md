@@ -21,6 +21,12 @@ Install using `pip`...
 pip install leicaautomator
 ```
 
+**Mac users:**
+Run PySide post install:
+```bash
+pyside_postinstall.py -install
+```
+
 ## Example
 
 ![](demo.png)
