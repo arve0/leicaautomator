@@ -21,7 +21,7 @@ pip install leicaautomator
 
 ## Example
 
-TODO: Write example.
+![](demo.png)
 
 ## Testing
 
