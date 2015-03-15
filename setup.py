@@ -2,30 +2,20 @@
 
 import os
 import sys
+from setuptools import setup
 
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
-
-
-if sys.argv[-1] == 'publish':
-    os.system('python setup.py sdist upload')
-    sys.exit()
 
 os.system('make rst')
-readme = open('README.rst').read()
-doclink = """
-Documentation
--------------
-
-The full documentation is at http://leicaautomator.rtfd.org."""
+try:
+    readme = open('README.rst').read()
+except FileNotFoundError:
+    readme = ""
 
 setup(
     name='leicaautomator',
     version='0.0.1',
     description='Automate scans on Leica SPX microscopes',
-    long_description=readme + '\n\n' + doclink,
+    long_description=readme,
     author='Arve Seljebu',
     author_email='arve.seljebu@gmail.com',
     url='https://github.com/arve0/leicaautomator',
@@ -35,10 +25,10 @@ setup(
     package_dir={'leicaautomator': 'leicaautomator'},
     include_package_data=True,
     install_requires=[
-    'scikit-image',
-    'numpy',
-    'matplotlib',
-    'PySide'
+        'scikit-image',
+        'numpy',
+        'matplotlib',
+        'PySide'
     ],
     license='MIT',
     zip_safe=False,
@@ -52,6 +42,5 @@ setup(
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: Implementation :: PyPy',
     ],
 )
