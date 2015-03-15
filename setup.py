@@ -35,6 +35,10 @@ setup(
     package_dir={'leicaautomator': 'leicaautomator'},
     include_package_data=True,
     install_requires=[
+    'scikit-image',
+    'numpy',
+    'matplotlib',
+    'PySide'
     ],
     license='MIT',
     zip_safe=False,
