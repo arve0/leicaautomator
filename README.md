@@ -23,7 +23,7 @@ pip install leicaautomator
 
 ## Example
 
-TODO: Write example.
+![](demo.png)
 
 ## Development
 Install dependencies and link development version of leicaautomator to pip:
