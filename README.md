@@ -31,6 +31,9 @@ pyside_postinstall.py -install
 
 ![](demo.png)
 
+## Documentation
+Read API reference: http://leicaautomator.rtfd.org/
+
 ## Development
 Install dependencies and link development version of leicaautomator to pip:
 ```bash
