@@ -38,6 +38,9 @@ coverage:
 	coverage html
 	open htmlcov/index.html
 
+api-docs:
+		sphinx-apidoc -Mf -o docs/ leicaautomator
+
 docs:
 	rm -f docs/leicaautomator.rst
 	rm -f docs/modules.rst
