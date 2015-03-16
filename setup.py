@@ -28,7 +28,6 @@ setup(
         'scikit-image',
         'numpy',
         'matplotlib',
-        'PySide',
         'leicascanningtemplate',
     ],
     license='MIT',
