@@ -22,13 +22,14 @@ cwd = os.getcwd()
 parent = os.path.dirname(cwd)
 sys.path.insert(0, parent)
 
-import leicaautomator
-
 import mock
 
 MOCK_MODULES = ['numpy', 'scipy.ndimage', 'matplotlib', 'skimage']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
+
+import leicaautomator
+
 
 # -- General configuration -----------------------------------------------------
 
