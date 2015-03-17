@@ -47,16 +47,55 @@ def find_spots(experiment):
 
     Returns
     -------
-    list of leicaautomator.Spot
+    list of regions from skimage.measure.regionprops
+        Regions have these extra attributes:
 
+        - ``real_x`` : ``x`` in meters.
+        - ``real_y`` : ``y`` in meters.
+        - ``x``, ``y``, ``x_end``, ``y_end`` : same as ``bbox``.
+        - ``well_x`` : well x coordinate, from 0.
+        - ``well_y`` : well y coordinate, from 0.
     """
     stitched = experiment.stitched
     if not len(stitched):
-        return []
+        # try stitching
+        stitched = experiment.stitch()
+        if not len(stitched):
+            return []
+
     img_path = stitched[0]
     img = io.imread(img_path)
 
-    # viewer
+    ##
+    # Position of pixel 0,0
+    ##
+    tmpl_path = experiment.scanning_template
+    tmpl = ScanningTemplate(tmpl_path)
+    field = tmpl.field(1, 1, 1, 1) # first field in first well
+    # in meters
+    x_start = field.FieldXCoordinate
+    y_start = field.FieldYCoordinate
+
+    # coordinates in pixels from TileConfiguration.registered.txt
+    stitch_coord = experiment.stitch_coordinates(0,0)
+    xmin = min(stitch_coord[0])
+    ymin = min(stitch_coord[1])
+
+    # pixel size in microns
+    # http://www.openmicroscopy.org/site/support/ome-model/specifications/
+    metadata = experiment.field_metadata()
+    x_px_size = float(metadata.Image.Pixels.attrib['PhysicalSizeX'])*1e-6
+    y_px_size = float(metadata.Image.Pixels.attrib['PhysicalSizeY'])*1e-6
+
+    # adjust in case first field is not placed at 0,0
+    # in meters
+    real_x_start = x_start + xmin*x_px_size
+    real_y_start = y_start + ymin*y_px_size
+
+
+    ##
+    # Find spots with different kind of filters
+    ##
     viewer = ImageViewer(img)
     #viewer += CropPlugin()
     #viewer += EntropyPlugin()
@@ -68,33 +107,12 @@ def find_spots(experiment):
     viewer += FillHolesPlugin()
     #viewer += LabelPlugin()
     viewer += RegionPlugin()
+    # regions is a list of skimage.measure.regionprops
     image, regions = viewer.show()[-1] # output of last plugin
 
-    tmpl_path = experiment.scanning_template
-    tmpl = ScanningTemplate(tmpl_path)
-    field = tmpl.field(1, 1, 1, 1) # first field in first well
-    x_start = field.FieldXCoordinate
-    y_start = field.FieldYCoordinate
 
+    for region in regions:
+        region.real_x = real_x_start + region.x*x_px_size
+        region.real_y = real_y_start + region.y*y_px_size
 
-
-
-
-
-
-class Spot:
-    def __init__(self, position, well):
-        """Object for spots found on glass slides.
-
-        Properties
-        ----------
-        position : tuple
-            Spatial stage position of well in meters.
-        well : tuple
-            Coordinates of well. Example (1,1) is top left well.
-        image : ndarray
-            Image data of well.
-        """
-        self.position = position
-        self.well = well
-        self.image = None
+    return regions
