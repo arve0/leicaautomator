@@ -13,7 +13,7 @@ except FileNotFoundError:
 
 setup(
     name='leicaautomator',
-    version='0.0.1',
+    version='0.0.2',
     description='Automate scans on Leica SPX microscopes',
     long_description=readme,
     author='Arve Seljebu',
