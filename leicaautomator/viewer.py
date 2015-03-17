@@ -239,13 +239,24 @@ class RegionPlugin(EnablePlugin):
         self.circles = np.zeros_like(labels)
         self.regions = [r for r in measure.regionprops(labels)]
         rs = [reg.equivalent_diameter/2 for reg in self.regions]
+
         # median as representation for area
         r = np.median(rs)
+
         for region in self.regions:
             # draw circle around regions of interest
             rr, cc = draw.circle(*region.centroid + (r,))
             self.circles[rr, cc] = region.label
+            # creat .x and .y property for easy access
+            region.y, region.x, region.y_end, region.x_end = region.bbox
+
+        self.regions = set_well_positions(self.regions)
+
+        # set background to -1, label2rbg will not draw -1
+        # ** this will change in skimage v0.12 -1 -> 0 **
         self.circles[self.circles==0] = -1
+
+        # return overlay image
         return color.label2rgb(self.circles, image=self.image_viewer.original_image)
 
     def output(self):
@@ -270,3 +281,35 @@ class ResetWidget(viewer.widgets.BaseWidget):
         img = self.plugin.image_viewer.original_image.copy()
         self.plugin.display_filtered_image(img)
         self.plugin.image_changed.emit(img)
+
+
+def set_well_positions(regions):
+    """Set property well_x/y on region. Helper function for RegionPlugin.
+
+    Parameters
+    ----------
+    regions : list of skimage.regionprops
+        Region should also have set ``x`` and ``y`` property.
+
+    Returns
+    -------
+    list of skimage.regionprops
+        Regions with extra property ``well_x`` and ``well_y`` set.
+    """
+    for direction in ['x', 'y']:
+        regions = sorted(regions, key=lambda r: getattr(r, direction))
+        gradients = np.gradient([getattr(r, direction) for r in regions])
+        gradient_treshold = max(gradients) / 2
+
+        # add well_x/y property to region
+        well = 0
+        previous = regions[0]
+        for region in regions:
+            dx = getattr(region, direction) - getattr(previous, direction)
+            # if gradient to prev coordinate is high, we have a new row/column
+            if dx > gradient_treshold:
+                well += 1
+            setattr(region, 'well_' + direction, well)
+            previous = region
+
+    return regions
