@@ -22,6 +22,8 @@ Install using ``pip``...
 
     pip install leicaautomator
 
+TODO: note about qt
+
 **Mac users:** Run PySide post install:
 
 .. code:: bash
