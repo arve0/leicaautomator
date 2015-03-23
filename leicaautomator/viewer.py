@@ -234,6 +234,12 @@ class LabelPlugin(EnablePlugin):
 
 class RegionPlugin(EnablePlugin):
     name = 'Region'
+    def __init__(self, **kwargs):
+        super(RegionPlugin, self).__init__(**kwargs)
+        self.max_regions = viewer.widgets.Slider('maximum number of regions',
+                low=0, high=150, value=129, value_type='int', ptype='plugin')
+        self.add_widget(self.max_regions)
+
     def attach(self, image_viewer):
         super(RegionPlugin, self).attach(image_viewer)
         self._overlay_plot = None
@@ -248,6 +254,10 @@ class RegionPlugin(EnablePlugin):
         self.labels = measure.label(img, background=0)
         # for checking if region.label is falsey, will change in skimage v0.12
         self.labels[self.labels==0] = self.labels.max() + 1
+        # only keep number_of_regions
+        if self.labels.max() > self.max_regions.val:
+            # set them to background
+            self.labels[self.labels > self.max_regions.val] = -1
         self.regions = [r for r in measure.regionprops(self.labels)]
 
         for r in self.regions:
