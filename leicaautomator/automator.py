@@ -108,11 +108,11 @@ def find_spots(experiment):
     #viewer += LabelPlugin()
     viewer += RegionPlugin()
     # regions is a list of skimage.measure.regionprops
-    image, regions = viewer.show()[-1] # output of last plugin
+    labels, image, regions = viewer.show()[-1] # output of last plugin
 
 
     for region in regions:
         region.real_x = real_x_start + region.x*x_px_size
         region.real_y = real_y_start + region.y*y_px_size
 
-    return regions
+    return labels, image, regions

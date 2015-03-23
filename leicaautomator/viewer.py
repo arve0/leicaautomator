@@ -5,8 +5,8 @@ from skimage import viewer, draw, filters, exposure, measure, color, morphology
 import scipy.ndimage as nd
 import numpy as np
 
-
-import pdb
+# TODO: remove
+#import pdb
 
 ##
 # Viewer
@@ -234,33 +234,72 @@ class LabelPlugin(EnablePlugin):
 
 class RegionPlugin(EnablePlugin):
     name = 'Region'
+    def attach(self, image_viewer):
+        super(RegionPlugin, self).attach(image_viewer)
+        self._overlay_plot = None
+        self.regions = None
+
+        self.move_region = MoveRegion(image_viewer, self)
+        image_viewer.add_tool(self.move_region)
+
+
+
     def image_filter(self, img):
-        labels = measure.label(img, background=0)
-        self.circles = np.zeros_like(labels)
-        self.regions = [r for r in measure.regionprops(labels)]
-        rs = [reg.equivalent_diameter/2 for reg in self.regions]
+        self.labels = measure.label(img, background=0)
+        # for checking if region.label is falsey, will change in skimage v0.12
+        self.labels[self.labels==0] = self.labels.max() + 1
+        self.regions = [r for r in measure.regionprops(self.labels)]
 
-        # median as representation for area
-        r = np.median(rs)
-
-        for region in self.regions:
-            # draw circle around regions of interest
-            rr, cc = draw.circle(*region.centroid + (r,))
-            self.circles[rr, cc] = region.label
+        for r in self.regions:
             # creat .x and .y property for easy access
-            region.y, region.x, region.y_end, region.x_end = region.bbox
+            r.y, r.x, r.y_end, r.x_end = r.bbox
 
+        self.create_overlay()
         self.regions = set_well_positions(self.regions)
-
-        # set background to -1, label2rbg will not draw -1
-        # ** this will change in skimage v0.12 -1 -> 0 **
-        self.circles[self.circles==0] = -1
-
         # return overlay image
-        return color.label2rgb(self.circles, image=self.image_viewer.original_image)
+        return self.overlay
+
+
+    def create_overlay(self):
+        if not self.regions:
+            return
+        diameters = [r.equivalent_diameter for r in self.regions]
+        # median as representation for area
+        size = np.median(diameters) * 1.2
+
+        self.overlay = np.zeros_like(self.labels)
+        for r in self.regions:
+            # draw square around regions of interest
+            self.overlay[r.y:r.y + size, r.x:r.x + size] = r.label
+
+
+    def display_filtered_image(self, overlay):
+        "Override: display overlay, instead of filtered image."
+        # yellow see through colormap
+        cmap = viewer.utils.ClearColormap((0,1,1))
+        ax = self.image_viewer.ax
+
+        if not self.enabled:
+            if self._overlay_plot:
+                ax.images.remove(self._overlay_plot)
+                self._overlay_plot = None
+            self.image_viewer.image = self.arguments[0]
+        else:
+            if not self.image_viewer.image is self.image_viewer.original_image:
+                # do not update image if its already printed
+                self.image_viewer.image = self.image_viewer.original_image
+            if self._overlay_plot:
+                viewer.utils.update_axes_image(self._overlay_plot, overlay)
+            else:
+                self._overlay_plot = ax.imshow(overlay > 0, cmap=cmap, alpha=0.3)
+
+            if self.image_viewer.useblit:
+                self.image_viewer._blit_manager.background = None
+
+            self.image_viewer.redraw()
 
     def output(self):
-        return (self.circles, self.regions)
+        return (self.labels, self.overlay, self.regions)
 
 
 
@@ -313,3 +352,40 @@ def set_well_positions(regions):
             previous = region
 
     return regions
+
+
+##
+# Canvas tools
+##
+class MoveRegion(viewer.canvastools.base.CanvasToolBase):
+    "Moves regions around by clicking on them."
+    def __init__(self, image_viewer, region_plugin):
+        super(MoveRegion, self).__init__(image_viewer)
+        self.region_plugin = region_plugin
+        self.label = None
+
+    def on_mouse_press(self, event):
+        self.x = int(event.xdata)
+        self.y = int(event.ydata)
+        label = self.region_plugin.overlay[self.y,self.x]
+        if label:
+            # not background
+            self.label = label
+            self.selected_region = next((r for r in self.region_plugin.regions if r.label == label), None)
+
+    def on_mouse_release(self, event):
+        self.label = None
+
+    def on_move(self, event):
+        if not self.label:
+            return
+        x = int(event.xdata)
+        y = int(event.ydata)
+        dx = x - self.x
+        dy = y - self.y
+        self.selected_region.x += dx
+        self.selected_region.y += dy
+        self.x = x
+        self.y = y
+        self.region_plugin.create_overlay()
+        self.region_plugin.display_filtered_image(self.region_plugin.overlay)
