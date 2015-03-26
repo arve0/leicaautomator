@@ -29,8 +29,9 @@
 # avoid agg backend warning
 import matplotlib
 matplotlib.use('Agg')
+matplotlib.rcParams['image.interpolation'] = 'none'
 
-from skimage import io
+from skimage import io, transform
 from .viewer import *
 from leicascanningtemplate import ScanningTemplate
 from os import path
@@ -66,6 +67,14 @@ def find_spots(experiment):
     img_path = stitched[0]
     img = io.imread(img_path)
 
+    # resize for performance
+    # x,y = img.shape
+    # if x > 2048:
+    #     factor = x / 2048
+    #     new_x = round(x/factor)
+    #     new_y = round(y/factor)
+    #     img = transform.resize(img, (new_x, new_y))
+
     ##
     # Position of pixel 0,0
     ##
@@ -100,7 +109,9 @@ def find_spots(experiment):
     #viewer += CropPlugin()
     #viewer += EntropyPlugin()
     viewer += HistogramWidthPlugin()
-    viewer += OtsuPlugin()
+    # Li threshold gives lower threshold values then Otsu
+    viewer += LiThresholdPlugin()
+    #viewer += OtsuPlugin()
     viewer += ErosionPlugin()
     viewer += DilationPlugin()
     viewer += MinimumAreaPlugin()
@@ -108,11 +119,11 @@ def find_spots(experiment):
     #viewer += LabelPlugin()
     viewer += RegionPlugin()
     # regions is a list of skimage.measure.regionprops
-    labels, image, regions = viewer.show()[-1] # output of last plugin
+    labels, regions = viewer.show()[-1] # output of last plugin
 
 
     for region in regions:
         region.real_x = real_x_start + region.x*x_px_size
         region.real_y = real_y_start + region.y*y_px_size
 
-    return labels, image, regions
+    return labels, regions

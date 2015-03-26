@@ -2,8 +2,12 @@
 scikit-image viewer plugins and widgets.
 """
 from skimage import viewer, draw, filters, exposure, measure, color, morphology
+from skimage.measure._regionprops import _RegionProperties as RegionProperties
+
 import scipy.ndimage as nd
 import numpy as np
+from matplotlib.patches import Polygon
+from copy import deepcopy
 
 # TODO: remove
 #import pdb
@@ -85,13 +89,24 @@ class EnablePlugin(SeriesPlugin):
         super(EnablePlugin, self).update_plugin(name,val)
         self.filter_image()
 
-    def filter_image(self, **kwargs):
+    def filter_image(self, *args, **kwargs):
         "Filter if plugin enabled and we have image."
         if self.enabled and len(self.arguments):
-            super(EnablePlugin, self).filter_image(**kwargs)
+            arguments = [self._get_value(a) for a in self.arguments]
+            kwargs = dict([(name, self._get_value(a))
+                           for name, a in self.keyword_arguments.items()])
+            filtered = self.image_filter(*arguments, **kwargs)
         elif len(self.arguments):
-            self.display_filtered_image(self.arguments[0])
-            self.image_changed.emit(self.arguments[0])
+            # not enabled
+            filtered = self.arguments[0]
+
+        if self is self.image_viewer.plugins[-1]:
+            # last plugin, update view
+            self.display_filtered_image(filtered)
+
+        # send to next plugin
+        self.image_changed.emit(filtered)
+
 
 
 class SelemPlugin(EnablePlugin):
@@ -147,19 +162,43 @@ class EntropyPlugin(SelemPlugin):
 class HistogramWidthPlugin(SelemPlugin):
     name = "Histogram width"
     selem_size = 2
+    width = 4 # bandwith of intensity values
 
-    def image_filter(self, img, selem, **kwargs):
-        filtered = filters.rank.pop_bilateral(img, selem, s0=2, s1=2)
-        thresh = filters.threshold_li(filtered)
-        return filtered < thresh
+    def __init__(self, **kwargs):
+        super(HistogramWidthPlugin, self).__init__(**kwargs)
+        self.s0 = viewer.widgets.Slider('s0', low=0, high=10,
+            value=self.width//2, value_type='int', update_on='release')
+        self.s1 = viewer.widgets.Slider('s1', low=0, high=10,
+            value=self.width//2, value_type='int', update_on='release')
+
+        self.add_widget(self.s0)
+        self.add_widget(self.s1)
+
+        self.image_filter = filters.rank.pop_bilateral
 
 
 class OtsuPlugin(EnablePlugin):
-    name = "Otsu"
+    name = "Otsu Threshold"
 
     def image_filter(self, image, **kwargs):
         t = filters.threshold_otsu(image)
         return image >= t
+
+
+class LiThresholdPlugin(EnablePlugin):
+    name = "Li Threshold"
+    def __init__(self, **kwargs):
+        super(LiThresholdPlugin, self).__init__(**kwargs)
+        self._invert = viewer.widgets.CheckBox('invert', value=True, ptype='plugin')
+        self.add_widget(self._invert)
+        self.invert = True
+
+    def image_filter(self, image, **kwargs):
+        t = filters.threshold_li(image)
+        if self.invert:
+            return image < t
+        else:
+            return image >= t
 
 
 class ErosionPlugin(SelemPlugin):
@@ -181,11 +220,11 @@ class DilationPlugin(SelemPlugin):
 
 
 class MinimumAreaPlugin(EnablePlugin):
-    def __init__(self, minimum_area=1000, **kwargs):
+    def __init__(self, minimum_area=4000, **kwargs):
         super(MinimumAreaPlugin, self).__init__(**kwargs)
         self.name = "Minimum area"
-        area = viewer.widgets.Slider('minimum_area', low=1, high=10000, value=minimum_area,
-                        value_type='int')
+        area = viewer.widgets.Slider('minimum_area', low=1000, high=100000,
+                    value=minimum_area, value_type='int')
         self.add_widget(area)
 
 
@@ -240,77 +279,148 @@ class RegionPlugin(EnablePlugin):
                 low=0, high=150, value=129, value_type='int', ptype='plugin')
         self.add_widget(self.max_regions)
 
+
     def attach(self, image_viewer):
         super(RegionPlugin, self).attach(image_viewer)
-        self._overlay_plot = None
-        self.regions = None
+        self.regions = []
 
         self.move_region = MoveRegion(image_viewer, self)
         image_viewer.add_tool(self.move_region)
 
 
+    def filter_image(self, *args, **kwargs):
+        if self.regions:
+            # remove previous regions from canvas
+            print('removing regions from canvas')
+            for r in self.regions:
+                r.polygon.remove()
+                r.text.remove()
+        super(RegionPlugin, self).filter_image(*args, **kwargs)
+
 
     def image_filter(self, img):
         self.labels = measure.label(img, background=0)
-        # for checking if region.label is falsey, will change in skimage v0.12
+        # do not use label 0
         self.labels[self.labels==0] = self.labels.max() + 1
-        # only keep number_of_regions
-        if self.labels.max() > self.max_regions.val:
-            # set them to background
-            self.labels[self.labels > self.max_regions.val] = -1
-        self.regions = [r for r in measure.regionprops(self.labels)]
+        # sorted by size, largest first
+        self.regions = sorted((r for r in measure.regionprops(self.labels)),
+                              key=lambda r: -r.area)
+        # only keep max_regions
+        if len(self.regions) > self.max_regions.val:
+            self.regions = self.regions[:self.max_regions.val]
 
-        for r in self.regions:
-            # creat .x and .y property for easy access
-            r.y, r.x, r.y_end, r.x_end = r.bbox
+        self.set_coordinates()
+        self.set_well_positions()
+        self.create_polygons()
+        # return original image
+        return self.image_viewer.original_image
 
-        self.create_overlay()
-        self.regions = set_well_positions(self.regions)
-        # return overlay image
-        return self.overlay
-
-
-    def create_overlay(self):
+    def set_coordinates(self):
         if not self.regions:
             return
-        diameters = [r.equivalent_diameter for r in self.regions]
+        self.diameters = [r.equivalent_diameter for r in self.regions]
         # median as representation for area
-        size = np.median(diameters) * 1.2
+        self.region_size = np.median(self.diameters)
 
-        self.overlay = np.zeros_like(self.labels)
         for r in self.regions:
+            r.y, r.x = r.centroid
+            r.x -= self.region_size * 0.5
+            r.y -= self.region_size * 0.5
             # draw square around regions of interest
-            self.overlay[r.y:r.y + size, r.x:r.x + size] = r.label
+            r.x_end = r.x + self.region_size
+            r.y_end = r.y + self.region_size
 
 
-    def display_filtered_image(self, overlay):
-        "Override: display overlay, instead of filtered image."
-        # yellow see through colormap
-        cmap = viewer.utils.ClearColormap((0,1,1))
+    def create_polygons(self):
+        "Creates region.polygon which can be added to the mpl axes."
+        if not self.regions:
+            return
+
+        for region in self.regions:
+            region = create_polygon(region)
+
+
+    def display_filtered_image(self, image):
+        "Display original image with polygons, instead of segmented image."
         ax = self.image_viewer.ax
 
-        if not self.enabled:
-            if self._overlay_plot:
-                ax.images.remove(self._overlay_plot)
-                self._overlay_plot = None
-            self.image_viewer.image = self.arguments[0]
-        else:
-            if not self.image_viewer.image is self.image_viewer.original_image:
-                # do not update image if its already printed
-                self.image_viewer.image = self.image_viewer.original_image
-            if self._overlay_plot:
-                viewer.utils.update_axes_image(self._overlay_plot, overlay)
-            else:
-                self._overlay_plot = ax.imshow(overlay > 0, cmap=cmap, alpha=0.3)
+        # set image and add polygons if called with args
+        self.image_viewer.image = image
 
-            if self.image_viewer.useblit:
-                self.image_viewer._blit_manager.background = None
+        if self.enabled:
+            for r in self.regions:
+                ax.add_patch(r.polygon)
+            self.draw_well_positions()
+            self.image_viewer.canvas.draw()
 
-            self.image_viewer.redraw()
+
+    def set_well_positions(self):
+        """Set property well_x/y on region.
+
+        Returns
+        -------
+        list of skimage.regionprops
+            Regions with extra property ``well_x`` and ``well_y`` set.
+        """
+        for direction in ['x', 'y']:
+            regions = sorted(self.regions, key=lambda r: getattr(r, direction))
+
+            # calc dx
+            previous = regions[0]
+            for region in regions:
+                dx = getattr(region, direction) - getattr(previous, direction)
+                setattr(region, 'd' + direction, dx)
+                previous = region
+
+            dxs = np.array([getattr(r, 'd' + direction) for r in regions])
+            min_threshold = dxs.max() * 0.5
+            mask = np.index_exp[dxs > min_threshold][0]
+            # do not include all high dxs
+            max_threshold = dxs.max() * 0.9
+            mask &= np.index_exp[dxs < max_threshold][0]
+            step = np.median(dxs[mask])
+
+            print(direction + ': ' + str(step))
+
+            # add well_x/y property to region
+            well = 0
+            previous = regions[0]
+            for r in regions:
+                dx = getattr(r, direction) - getattr(previous, direction)
+                # if gradient to prev coordinate is high, we have a new row/column
+                if dx > min_threshold:
+                    well += 1
+                setattr(r, 'well_' + direction, well)
+                previous = r
+        self.regions = regions
+        return regions
+
+
+    def draw_well_positions(self):
+        "Draw text showing well positions."
+        ax = self.image_viewer.ax
+        for r in self.regions:
+            text = '%s,%s' % (r.well_x, r.well_y)
+            x = r.x + (r.x_end - r.x) / 3
+            y = r.y + (r.y_end - r.y) / 3
+            try:
+                r.text.set_text(text)
+                r.text.set_position((x, y))
+            except AttributeError:
+                r.text = ax.text(x, y, text, color='k')
+
 
     def output(self):
-        return (self.labels, self.overlay, self.regions)
+        return (self.labels, self.regions)
 
+##
+# Helper functions
+##
+def create_polygon(r):
+    r.vertices = ((r.x, r.y), (r.x, r.y_end),
+                  (r.x_end, r.y_end), (r.x_end, r.y))
+    r.polygon = Polygon(r.vertices, alpha=0.3, color='y')
+    return r
 
 
 ##
@@ -332,36 +442,6 @@ class ResetWidget(viewer.widgets.BaseWidget):
         self.plugin.image_changed.emit(img)
 
 
-def set_well_positions(regions):
-    """Set property well_x/y on region. Helper function for RegionPlugin.
-
-    Parameters
-    ----------
-    regions : list of skimage.regionprops
-        Region should also have set ``x`` and ``y`` property.
-
-    Returns
-    -------
-    list of skimage.regionprops
-        Regions with extra property ``well_x`` and ``well_y`` set.
-    """
-    for direction in ['x', 'y']:
-        regions = sorted(regions, key=lambda r: getattr(r, direction))
-        gradients = np.gradient([getattr(r, direction) for r in regions])
-        gradient_treshold = max(gradients) / 2
-
-        # add well_x/y property to region
-        well = 0
-        previous = regions[0]
-        for region in regions:
-            dx = getattr(region, direction) - getattr(previous, direction)
-            # if gradient to prev coordinate is high, we have a new row/column
-            if dx > gradient_treshold:
-                well += 1
-            setattr(region, 'well_' + direction, well)
-            previous = region
-
-    return regions
 
 
 ##
@@ -372,30 +452,72 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
     def __init__(self, image_viewer, region_plugin):
         super(MoveRegion, self).__init__(image_viewer)
         self.region_plugin = region_plugin
-        self.label = None
+        self.selected_region = None
 
     def on_mouse_press(self, event):
-        self.x = int(event.xdata)
-        self.y = int(event.ydata)
-        label = self.region_plugin.overlay[self.y,self.x]
-        if label:
-            # not background
-            self.label = label
-            self.selected_region = next((r for r in self.region_plugin.regions if r.label == label), None)
+        if not event.xdata or not event.ydata:
+            return
+        x = int(event.xdata)
+        y = int(event.ydata)
+        # store position, for calculation dx/dy
+        self.x = x
+        self.y = y
+
+        if event.dblclick:
+            label = self.region_plugin.labels.max() + 1
+            # create square where double click is at
+            width = self.region_plugin.region_size * 0.5
+            slice_ = (slice(y - width, y + width),
+                      slice(x - width, x + width))
+            self.region_plugin.labels[slice_] = label
+
+            # add region
+            r = RegionProperties(slice_, label, self.region_plugin.labels,
+                                      intensity_image=None, cache_active=False)
+            r.y, r.x = r.centroid
+            r.x -= width
+            r.y -= width
+            # draw square around regions of interest
+            r.x_end = r.x + 2*width
+            r.y_end = r.y + 2*width
+
+            r = create_polygon(r)
+            self.viewer.ax.add_patch(r.polygon)
+            self.region_plugin.regions.append(r)
+            self.region_plugin.set_well_positions()
+            self.region_plugin.draw_well_positions()
+            self.viewer.canvas.draw()
+            return
+
+        # will select first region if two regions overlap
+        self.selected_region = next((r for r in self.region_plugin.regions
+                                     if x >= r.x and x <= r.x_end and
+                                        y >= r.y and y <= r.y_end), None)
 
     def on_mouse_release(self, event):
-        self.label = None
+        self.selected_region = None
+        self.region_plugin.set_well_positions()
+        self.region_plugin.draw_well_positions()
+        self.viewer.canvas.draw()
 
     def on_move(self, event):
-        if not self.label:
+        if not event.xdata or not event.ydata:
             return
+        if not self.selected_region:
+            return
+        r = self.selected_region
         x = int(event.xdata)
         y = int(event.ydata)
         dx = x - self.x
         dy = y - self.y
-        self.selected_region.x += dx
-        self.selected_region.y += dy
+        r.x += dx
+        r.x_end += dx
+        r.y += dy
+        r.y_end += dy
         self.x = x
         self.y = y
-        self.region_plugin.create_overlay()
-        self.region_plugin.display_filtered_image(self.region_plugin.overlay)
+        r.vertices = ((r.x, r.y), (r.x, r.y_end),
+                      (r.x_end, r.y_end), (r.x_end, r.y))
+        # update positions
+        r.polygon.set_xy(r.vertices)
+        self.viewer.canvas.draw()
