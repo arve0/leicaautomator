@@ -385,8 +385,6 @@ class RegionPlugin(EnablePlugin):
             mask &= np.index_exp[dxs < max_threshold][0]
             step = np.median(dxs[mask])
 
-            print(direction + ': ' + str(step))
-
             # add well_x/y property to region
             well = 0
             previous = regions[0]
@@ -460,8 +458,6 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
         self.selected_region = None
 
     def on_mouse_press(self, event):
-        print('press', str(event))
-
         if not event.xdata or not event.ydata:
             return
         x = int(event.xdata)
@@ -511,8 +507,6 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
 
 
     def on_mouse_release(self, event):
-        print('release', str(event))
-
         if not self.selected_region:
             return
         if self.dx == 0 and self.dy == 0:
@@ -525,7 +519,6 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
         self.viewer.canvas.draw()
 
     def on_move(self, event):
-        print('move', str(event))
         if not event.xdata or not event.ydata:
             return
         if not self.selected_region:
