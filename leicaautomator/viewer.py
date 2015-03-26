@@ -174,7 +174,9 @@ class HistogramWidthPlugin(SelemPlugin):
         self.add_widget(self.s0)
         self.add_widget(self.s1)
 
-        self.image_filter = filters.rank.pop_bilateral
+    def image_filter(self, img, **kwargs):
+        filtered = filters.rank.pop_bilateral(img, **kwargs)
+        return exposure.rescale_intensity(-filtered)
 
 
 class OtsuPlugin(EnablePlugin):
@@ -189,9 +191,9 @@ class LiThresholdPlugin(EnablePlugin):
     name = "Li Threshold"
     def __init__(self, **kwargs):
         super(LiThresholdPlugin, self).__init__(**kwargs)
-        self._invert = viewer.widgets.CheckBox('invert', value=True, ptype='plugin')
+        self._invert = viewer.widgets.CheckBox('invert', value=False, ptype='plugin')
         self.add_widget(self._invert)
-        self.invert = True
+        self.invert = False
 
     def image_filter(self, image, **kwargs):
         t = filters.threshold_li(image)
@@ -293,8 +295,11 @@ class RegionPlugin(EnablePlugin):
             # remove previous regions from canvas
             print('removing regions from canvas')
             for r in self.regions:
-                r.polygon.remove()
-                r.text.remove()
+                try:
+                    r.polygon.remove()
+                    r.text.remove()
+                except ValueError:
+                    continue
         super(RegionPlugin, self).filter_image(*args, **kwargs)
 
 
@@ -313,7 +318,7 @@ class RegionPlugin(EnablePlugin):
         self.set_well_positions()
         self.create_polygons()
         # return original image
-        return self.image_viewer.original_image
+        return self.image_viewer.plugins[1].arguments[0]
 
     def set_coordinates(self):
         if not self.regions:
@@ -455,6 +460,8 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
         self.selected_region = None
 
     def on_mouse_press(self, event):
+        print('press', str(event))
+
         if not event.xdata or not event.ydata:
             return
         x = int(event.xdata)
@@ -462,8 +469,22 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
         # store position, for calculation dx/dy
         self.x = x
         self.y = y
+        self.dx = 0
+        self.dy = 0
 
-        if event.dblclick:
+        # will select first region if two regions overlap
+        self.selected_region = next((r for r in self.region_plugin.regions
+                                     if x >= r.x and x <= r.x_end and
+                                        y >= r.y and y <= r.y_end), None)
+        if event.dblclick and self.selected_region:
+            # remove
+            self.region_plugin.regions.remove(self.selected_region)
+            self.selected_region.polygon.remove()
+            self.selected_region.text.remove()
+            self.viewer.canvas.draw()
+            return
+
+        elif event.dblclick:
             label = self.region_plugin.labels.max() + 1
             # create square where double click is at
             width = self.region_plugin.region_size * 0.5
@@ -487,20 +508,24 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
             self.region_plugin.set_well_positions()
             self.region_plugin.draw_well_positions()
             self.viewer.canvas.draw()
-            return
 
-        # will select first region if two regions overlap
-        self.selected_region = next((r for r in self.region_plugin.regions
-                                     if x >= r.x and x <= r.x_end and
-                                        y >= r.y and y <= r.y_end), None)
 
     def on_mouse_release(self, event):
+        print('release', str(event))
+
+        if not self.selected_region:
+            return
+        if self.dx == 0 and self.dy == 0:
+            # on release first click in double click
+            self.selected_region = None
+            return
         self.selected_region = None
         self.region_plugin.set_well_positions()
         self.region_plugin.draw_well_positions()
         self.viewer.canvas.draw()
 
     def on_move(self, event):
+        print('move', str(event))
         if not event.xdata or not event.ydata:
             return
         if not self.selected_region:
@@ -510,6 +535,10 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
         y = int(event.ydata)
         dx = x - self.x
         dy = y - self.y
+        self.dx = dx
+        self.dy = dy
+        if dx == 0 and dy == 0:
+            return
         r.x += dx
         r.x_end += dx
         r.y += dy
