@@ -395,6 +395,11 @@ class RegionPlugin(EnablePlugin):
                     well += 1
                 setattr(r, 'well_' + direction, well)
                 previous = r
+
+        for r in regions:
+            r.person_id = int((r.well_x-1)*3 + r.well_y//3 + 1)
+            r.picture_id = int(r.well_y%3 + 1)
+
         self.regions = regions
         return regions
 
@@ -403,9 +408,10 @@ class RegionPlugin(EnablePlugin):
         "Draw text showing well positions."
         ax = self.image_viewer.ax
         for r in self.regions:
-            text = '%s,%s' % (r.well_x, r.well_y)
-            x = r.x + (r.x_end - r.x) / 3
-            y = r.y + (r.y_end - r.y) / 3
+            text = '%s,%s\n%s-%s' % (r.well_x, r.well_y,
+                                     r.person_id, r.picture_id)
+            x = r.x + (r.x_end - r.x) / 4
+            y = r.y_end - (r.y_end - r.y) / 4
             try:
                 r.text.set_text(text)
                 r.text.set_position((x, y))
