@@ -159,6 +159,9 @@ def find_spots(experiment):
     print('( well )   x[um], y[um]')
     print('-----------------------')
 
+    # sort regions by well position
+    regions = sorted(regions, key=lambda r: (r.well_x, r.well_y))
+
     for r in regions:
         expected_x, expected_y = (first_x + dx*r.well_x, first_y + dy*r.well_y)
         offset_x = round((r.real_x - expected_x)*1e6)
@@ -166,8 +169,6 @@ def find_spots(experiment):
         # only print if offset above 1 micron
         if abs(offset_x) > 10 or abs(offset_y) > 1:
             print('(%2d, %2d)   %5d, %5d' % (r.well_x, r.well_y, offset_x, offset_y))
-
-
 
     return labels, regions
 
