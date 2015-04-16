@@ -293,7 +293,6 @@ class RegionPlugin(EnablePlugin):
     def filter_image(self, *args, **kwargs):
         if self.regions:
             # remove previous regions from canvas
-            print('removing regions from canvas')
             for r in self.regions:
                 try:
                     r._polygon.remove()
@@ -318,22 +317,15 @@ class RegionPlugin(EnablePlugin):
         self.set_well_positions()
         self.create_polygons()
         # return original image
-        return self.image_viewer.plugins[1].arguments[0]
+        return self.image_viewer.original_image
+
 
     def set_coordinates(self):
         if not self.regions:
             return
-        self.diameters = [r.equivalent_diameter for r in self.regions]
-        # median as representation for area
-        self.region_size = np.median(self.diameters)
 
         for r in self.regions:
-            r.y, r.x = r.centroid
-            r.x -= self.region_size * 0.5
-            r.y -= self.region_size * 0.5
-            # draw square around regions of interest
-            r.x_end = r.x + self.region_size
-            r.y_end = r.y + self.region_size
+            r.y, r.x, r.y_end, r.x_end = r.bbox
 
 
     def create_polygons(self):
@@ -393,7 +385,7 @@ class RegionPlugin(EnablePlugin):
                 # if gradient to prev coordinate is high, we have a new row/column
                 if dx > min_threshold:
                     well += 1
-                setattr(r, 'well_' + direction, well)
+                setattr(r, 'well_' + direction, well+1) # start at 1
                 previous = r
 
         for r in regions:
