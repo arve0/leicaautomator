@@ -26,9 +26,9 @@ setup(
     include_package_data=True,
     install_requires=[
         'scipy',
-        'scikit-image',
         'numpy',
         'matplotlib',
+        'scikit-image',
         'leicascanningtemplate',
         'leicacam',
         'leicaexperiment'
