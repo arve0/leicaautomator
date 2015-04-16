@@ -29,12 +29,10 @@
 # avoid agg backend warning
 import matplotlib
 matplotlib.use('Agg')
-matplotlib.rcParams['image.interpolation'] = 'none'
 
 from skimage import io, transform
 from .viewer import *
 from leicascanningtemplate import ScanningTemplate
-from os import path
 import numpy as np
 
 def find_spots(experiment):
@@ -67,14 +65,6 @@ def find_spots(experiment):
 
     img_path = stitched[0]
     img = io.imread(img_path)
-
-    # resize for performance
-    # x,y = img.shape
-    # if x > 2048:
-    #     factor = x / 2048
-    #     new_x = round(x/factor)
-    #     new_y = round(y/factor)
-    #     img = transform.resize(img, (new_x, new_y))
 
     ##
     # Position of pixel 0,0
