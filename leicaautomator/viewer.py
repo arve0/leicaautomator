@@ -7,10 +7,6 @@ from skimage.measure._regionprops import _RegionProperties as RegionProperties
 import scipy.ndimage as nd
 import numpy as np
 from matplotlib.patches import Polygon
-from copy import deepcopy
-
-# TODO: remove
-#import pdb
 
 ##
 # Viewer
@@ -313,11 +309,16 @@ class RegionPlugin(EnablePlugin):
         if len(self.regions) > self.max_regions.val:
             self.regions = self.regions[:self.max_regions.val]
 
+        self.median_area = np.median([r.area for r in self.regions])
+
         self.set_coordinates()
         self.set_well_positions()
         self.create_polygons()
-        # return original image
-        return self.image_viewer.original_image
+        # equalized original image
+        selem = morphology.disk(30)
+        img = self.image_viewer.original_image
+        filtered = filters.rank.equalize(img, selem)
+        return filtered
 
 
     def set_coordinates(self):
@@ -385,12 +386,8 @@ class RegionPlugin(EnablePlugin):
                 # if gradient to prev coordinate is high, we have a new row/column
                 if dx > min_threshold:
                     well += 1
-                setattr(r, 'well_' + direction, well+1) # start at 1
+                setattr(r, 'well_' + direction, well) # start at 1
                 previous = r
-
-        for r in regions:
-            r.person_id = int((r.well_x-1)*3 + r.well_y//3 + 1)
-            r.picture_id = int(r.well_y%3 + 1)
 
         self.regions = regions
         return regions
@@ -400,15 +397,15 @@ class RegionPlugin(EnablePlugin):
         "create _text property of well positions"
         ax = self.image_viewer.ax
         for r in self.regions:
-            text = '%s,%s\n%s-%s' % (r.well_x, r.well_y,
-                                     r.person_id, r.picture_id)
+            text = '%s,%s' % (r.well_x+1, r.well_y+1) # (1,1) top left
             x = r.x + (r.x_end - r.x) / 4
-            y = r.y_end - (r.y_end - r.y) / 4
+            y = r.y_end - (r.y_end - r.y) / 3
             try:
                 r._text.set_text(text)
                 r._text.set_position((x, y))
             except AttributeError:
-                r._text = ax.text(x, y, text, color='k')
+                r._text = ax.text(x, y, text, color='w',
+                                  fontsize=14, backgroundcolor='k')
 
 
     def output(self):
@@ -478,13 +475,14 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
             self.region._polygon.remove()
             self.region._text.remove()
             self.canvas.draw()
+            self.region = None
             return
 
         elif event.dblclick:
             # add region where double click is at
             label = self.region_plugin.labels.max() + 1
             # square in label image
-            width = self.region_plugin.region_size * 0.5
+            width = (self.region_plugin.median_area)**0.5 / 2
             slice_ = (slice(y - width, y + width),
                       slice(x - width, x + width))
             self.region_plugin.labels[slice_] = label
