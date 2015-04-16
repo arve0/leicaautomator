@@ -296,8 +296,8 @@ class RegionPlugin(EnablePlugin):
             print('removing regions from canvas')
             for r in self.regions:
                 try:
-                    r.polygon.remove()
-                    r.text.remove()
+                    r._polygon.remove()
+                    r._text.remove()
                 except ValueError:
                     continue
         super(RegionPlugin, self).filter_image(*args, **kwargs)
@@ -337,7 +337,7 @@ class RegionPlugin(EnablePlugin):
 
 
     def create_polygons(self):
-        "Creates region.polygon which can be added to the mpl axes."
+        "Creates region._polygon which can be added to the mpl axes."
         if not self.regions:
             return
 
@@ -354,8 +354,8 @@ class RegionPlugin(EnablePlugin):
 
         if self.enabled:
             for r in self.regions:
-                ax.add_patch(r.polygon)
-            self.draw_well_positions()
+                ax.add_patch(r._polygon)
+            self.set_texts()
             self.image_viewer.canvas.draw()
 
 
@@ -404,8 +404,8 @@ class RegionPlugin(EnablePlugin):
         return regions
 
 
-    def draw_well_positions(self):
-        "Draw text showing well positions."
+    def set_texts(self):
+        "create _text property of well positions"
         ax = self.image_viewer.ax
         for r in self.regions:
             text = '%s,%s\n%s-%s' % (r.well_x, r.well_y,
@@ -413,10 +413,10 @@ class RegionPlugin(EnablePlugin):
             x = r.x + (r.x_end - r.x) / 4
             y = r.y_end - (r.y_end - r.y) / 4
             try:
-                r.text.set_text(text)
-                r.text.set_position((x, y))
+                r._text.set_text(text)
+                r._text.set_position((x, y))
             except AttributeError:
-                r.text = ax.text(x, y, text, color='k')
+                r._text = ax.text(x, y, text, color='k')
 
 
     def output(self):
@@ -428,7 +428,7 @@ class RegionPlugin(EnablePlugin):
 def create_polygon(r):
     r.vertices = ((r.x, r.y), (r.x, r.y_end),
                   (r.x_end, r.y_end), (r.x_end, r.y))
-    r.polygon = Polygon(r.vertices, alpha=0.3, color='y')
+    r._polygon = Polygon(r.vertices, fill=False, edgecolor='y', linewidth=2)
     return r
 
 
@@ -457,11 +457,15 @@ class ResetWidget(viewer.widgets.BaseWidget):
 # Canvas tools
 ##
 class MoveRegion(viewer.canvastools.base.CanvasToolBase):
-    "Moves regions around by clicking on them."
+    """Moves regions around by clicking on them.
+
+    http://matplotlib.org/users/event_handling.html#draggable-rectangle-exercise
+    """
     def __init__(self, image_viewer, region_plugin):
         super(MoveRegion, self).__init__(image_viewer)
         self.region_plugin = region_plugin
-        self.selected_region = None
+        self.region = None # selected region
+        self.canvas = self.viewer.canvas
 
     def on_mouse_press(self, event):
         if not event.xdata or not event.ydata:
@@ -471,24 +475,23 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
         # store position, for calculation dx/dy
         self.x = x
         self.y = y
-        self.dx = 0
-        self.dy = 0
 
         # will select first region if two regions overlap
-        self.selected_region = next((r for r in self.region_plugin.regions
-                                     if x >= r.x and x <= r.x_end and
-                                        y >= r.y and y <= r.y_end), None)
-        if event.dblclick and self.selected_region:
+        self.region = next((r for r in self.region_plugin.regions
+                            if x >= r.x and x <= r.x_end and
+                            y >= r.y and y <= r.y_end), None)
+        if event.dblclick and self.region:
             # remove
-            self.region_plugin.regions.remove(self.selected_region)
-            self.selected_region.polygon.remove()
-            self.selected_region.text.remove()
-            self.viewer.canvas.draw()
+            self.region_plugin.regions.remove(self.region)
+            self.region._polygon.remove()
+            self.region._text.remove()
+            self.canvas.draw()
             return
 
         elif event.dblclick:
+            # add region where double click is at
             label = self.region_plugin.labels.max() + 1
-            # create square where double click is at
+            # square in label image
             width = self.region_plugin.region_size * 0.5
             slice_ = (slice(y - width, y + width),
                       slice(x - width, x + width))
@@ -496,7 +499,7 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
 
             # add region
             r = RegionProperties(slice_, label, self.region_plugin.labels,
-                                      intensity_image=None, cache_active=False)
+                                 intensity_image=None, cache_active=False)
             r.y, r.x = r.centroid
             r.x -= width
             r.y -= width
@@ -505,47 +508,55 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
             r.y_end = r.y + 2*width
 
             r = create_polygon(r)
-            self.viewer.ax.add_patch(r.polygon)
+            self.ax.add_patch(r._polygon)
             self.region_plugin.regions.append(r)
             self.region_plugin.set_well_positions()
-            self.region_plugin.draw_well_positions()
-            self.viewer.canvas.draw()
-
-
-    def on_mouse_release(self, event):
-        if not self.selected_region:
+            self.region_plugin.set_texts()
+            self.ax.draw_artist(r._polygon)
+            self.ax.draw_artist(r._text)
+            self.canvas.blit(self.ax.bbox)
             return
-        if self.dx == 0 and self.dy == 0:
-            # on release first click in double click
-            self.selected_region = None
-            return
-        self.selected_region = None
-        self.region_plugin.set_well_positions()
-        self.region_plugin.draw_well_positions()
-        self.viewer.canvas.draw()
+        elif self.region:
+            self.region._polygon.set_animated(True)
+            self.background = self.canvas.copy_from_bbox(self.ax.bbox)
 
     def on_move(self, event):
         if not event.xdata or not event.ydata:
             return
-        if not self.selected_region:
+        if not self.region:
             return
-        r = self.selected_region
         x = int(event.xdata)
         y = int(event.ydata)
         dx = x - self.x
         dy = y - self.y
-        self.dx = dx
-        self.dy = dy
         if dx == 0 and dy == 0:
             return
-        r.x += dx
-        r.x_end += dx
-        r.y += dy
-        r.y_end += dy
-        self.x = x
-        self.y = y
-        r.vertices = ((r.x, r.y), (r.x, r.y_end),
-                      (r.x_end, r.y_end), (r.x_end, r.y))
-        # update positions
-        r.polygon.set_xy(r.vertices)
-        self.viewer.canvas.draw()
+        vertices = [(v[0]+dx, v[1]+dy) for v in self.region.vertices]
+        self.region._polygon.set_xy(vertices)
+        # draw
+        self.canvas.restore_region(self.background)
+        self.ax.draw_artist(self.region._polygon)
+        self.canvas.blit(self.ax.bbox)
+
+    def on_mouse_release(self, event):
+        if not self.region:
+            return
+        x = int(event.xdata)
+        y = int(event.ydata)
+        dx = x - self.x
+        dy = y - self.y
+        if dx == 0 and dy == 0:
+            # on release first click in double click
+            return
+        vertices = [(v[0]+dx, v[1]+dy) for v in self.region.vertices]
+        self.region._polygon.set_xy(vertices)
+        self.region.vertices = vertices
+        self.region.x += dx
+        self.region.x_end += dx
+        self.region.y += dy
+        self.region.y_end += dy
+        self.region._polygon.set_animated(False)
+        self.region_plugin.set_well_positions()
+        self.region_plugin.set_texts()
+        self.canvas.draw()
+        self.region = None
