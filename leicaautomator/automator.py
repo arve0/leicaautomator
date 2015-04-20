@@ -26,10 +26,6 @@
 - list_of_wells.json without imgdata
 
 """
-# avoid agg backend warning
-import matplotlib
-matplotlib.use('Agg')
-
 from skimage import io, transform
 from .viewer import *
 from leicascanningtemplate import ScanningTemplate
@@ -66,6 +62,16 @@ def find_spots(experiment):
     img_path = stitched[0]
     img = io.imread(img_path)
 
+    # resize for performance
+    max_size = 4096
+    x,y = img.shape
+    factor = x / max_size
+    if factor > 1:
+        new_x = round(x/factor)
+        new_y = round(y/factor)
+        img = transform.resize(img, (new_x, new_y))
+
+
     ##
     # Position of pixel 0,0
     ##
@@ -86,6 +92,10 @@ def find_spots(experiment):
     metadata = experiment.field_metadata()
     x_px_size = float(metadata.Image.Pixels.attrib['PhysicalSizeX'])*1e-6
     y_px_size = float(metadata.Image.Pixels.attrib['PhysicalSizeY'])*1e-6
+
+    if factor > 1:
+        x_px_size *= factor
+        y_px_size *= factor
 
     # adjust in case first field is not placed at 0,0
     # in meters
