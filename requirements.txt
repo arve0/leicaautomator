@@ -1,5 +1,4 @@
 wheel>=0.22
--r docs/requirements.txt
 
 scikit-image==0.11.3 # stable of skimage when developed
 -e .
