@@ -314,11 +314,8 @@ class RegionPlugin(EnablePlugin):
         self.set_coordinates()
         self.set_well_positions()
         self.create_polygons()
-        # equalized original image
-        selem = morphology.disk(30)
-        img = self.image_viewer.original_image
-        filtered = filters.rank.equalize(img, selem)
-        return filtered
+        # overlay on original image
+        return self.image_viewer.original_image
 
 
     def set_coordinates(self):
