@@ -77,9 +77,9 @@ class EnablePlugin(SeriesPlugin):
     "Plugin with checkbox for enable/disable"
     def __init__(self, **kwargs):
         super(EnablePlugin, self).__init__(**kwargs)
-        enable = viewer.widgets.CheckBox('enabled', value=True, ptype='plugin')
+        enable = viewer.widgets.CheckBox('enabled', value=False, ptype='plugin')
         self.add_widget(enable)
-        self.enabled = True
+        self.enabled = False
 
     def update_plugin(self, name, val):
         super(EnablePlugin, self).update_plugin(name,val)
