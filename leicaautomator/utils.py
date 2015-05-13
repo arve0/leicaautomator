@@ -1,5 +1,8 @@
 import json
 import numpy
+import pickle
+import zlib
+from io import StringIO
 
 
 def _getattr(o, k):
@@ -22,8 +25,14 @@ def _get(region):
     return r
 
 def save_regions(regions, filename):
-    with open(filename, 'w') as f:
-        json.dump([_get(r) for r in regions], f)
+    "Save regions as compressed (gzip) pickle."
+    with open(filename, 'w') as fp:
+        s = StringIO
+        json.dump(regions, s)
+        s.seek(0)
+        zlib.compress(s.read())
+        s.seek(0)
+        fp.write(s.read())
 
 def flatten(iterable):
     return [x for sub in iterable for x in sub]
