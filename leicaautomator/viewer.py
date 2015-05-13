@@ -109,18 +109,18 @@ class SelemPlugin(EnablePlugin):
     """Add selem size widget for filters that use selem, instead of defining a
     separate filter-function for each of them.
     """
-    selem_size = 2
+    selem_size = 3
     def __init__(self, **kwargs):
         super(SelemPlugin, self).__init__(**kwargs)
         size = viewer.widgets.Slider('selem', low=1, high=10,
-            value=self.selem_size, value_type='float', ptype='plugin',
+            value=self.selem_size, value_type='int', ptype='plugin',
             update_on='release')
         self.add_widget(size)
         size.callback = self.update_selem
-        self.keyword_arguments['selem'] = morphology.disk(self.selem_size)
+        self.keyword_arguments['selem'] = morphology.square(self.selem_size)
 
     def update_selem(self, name, value):
-        self.keyword_arguments['selem'] = morphology.disk(value)
+        self.keyword_arguments['selem'] = morphology.square(value)
         self.filter_image()
 
 
@@ -155,13 +155,13 @@ class EntropyPlugin(SelemPlugin):
         return exposure.rescale_intensity(ent)
 
 
-class HistogramWidthPlugin(SelemPlugin):
-    name = "Histogram width"
-    selem_size = 2
-    width = 4 # bandwith of intensity values
+class PopBilateralPlugin(SelemPlugin):
+    name = "Bilateral population"
+    selem_size = 9
+    width = 20 # bandwith of intensity values
 
     def __init__(self, **kwargs):
-        super(HistogramWidthPlugin, self).__init__(**kwargs)
+        super(PopBilateralPlugin, self).__init__(**kwargs)
         self.s0 = viewer.widgets.Slider('s0', low=0, high=10,
             value=self.width//2, value_type='int', update_on='release')
         self.s1 = viewer.widgets.Slider('s1', low=0, high=10,
@@ -173,6 +173,14 @@ class HistogramWidthPlugin(SelemPlugin):
     def image_filter(self, img, **kwargs):
         filtered = filters.rank.pop_bilateral(img, **kwargs)
         return exposure.rescale_intensity(-filtered)
+
+
+class MeanPlugin(SelemPlugin):
+    name = 'Mean'
+    selem_size = 9
+
+    def image_filter(self, img, **kwargs):
+        return filters.rank.mean(img, **kwargs)
 
 
 class OtsuPlugin(EnablePlugin):
@@ -201,7 +209,6 @@ class LiThresholdPlugin(EnablePlugin):
 
 class ErosionPlugin(SelemPlugin):
     name = "Erosion"
-    selem_size = 2.5
 
     def image_filter(self, image, selem, **kwargs):
         from skimage import morphology
@@ -210,7 +217,6 @@ class ErosionPlugin(SelemPlugin):
 
 class DilationPlugin(SelemPlugin):
     name = "Dilation"
-    selem_size = 2
 
     def image_filter(self, image, selem, **kwargs):
         from skimage import morphology

@@ -62,14 +62,14 @@ def find_spots(experiment):
     img_path = stitched[0]
     img = io.imread(img_path)
 
-    # resize for performance
-    max_size = 4096
-    x,y = img.shape
-    factor = x / max_size
-    if factor > 1:
-        new_x = round(x/factor)
-        new_y = round(y/factor)
-        img = transform.resize(img, (new_x, new_y))
+    # # resize for performance
+    # max_size = 4096
+    # x,y = img.shape
+    # factor = x / max_size
+    # if factor > 1:
+    #     new_x = round(x/factor)
+    #     new_y = round(y/factor)
+    #     img = transform.resize(img, (new_x, new_y))
 
 
     ##
@@ -93,9 +93,9 @@ def find_spots(experiment):
     x_px_size = float(metadata.Image.Pixels.attrib['PhysicalSizeX'])*1e-6
     y_px_size = float(metadata.Image.Pixels.attrib['PhysicalSizeY'])*1e-6
 
-    if factor > 1:
-        x_px_size *= factor
-        y_px_size *= factor
+    # if factor > 1:
+    #     x_px_size *= factor
+    #     y_px_size *= factor
 
     # adjust in case first field is not placed at 0,0
     # in meters
@@ -109,14 +109,15 @@ def find_spots(experiment):
     viewer = ImageViewer(img)
     #viewer += CropPlugin()
     #viewer += EntropyPlugin()
-    viewer += HistogramWidthPlugin()
+    viewer += PopBilateralPlugin()
+    viewer += MeanPlugin()
     # Li threshold gives lower threshold values then Otsu
-    viewer += LiThresholdPlugin()
-    #viewer += OtsuPlugin()
-    viewer += ErosionPlugin()
-    viewer += DilationPlugin()
-    viewer += MinimumAreaPlugin()
-    viewer += FillHolesPlugin()
+    #viewer += LiThresholdPlugin()
+    viewer += OtsuPlugin()
+    #viewer += ErosionPlugin()
+    #viewer += DilationPlugin()
+    #viewer += MinimumAreaPlugin()
+    #viewer += FillHolesPlugin()
     #viewer += LabelPlugin()
     viewer += RegionPlugin()
     # regions is a list of skimage.measure.regionprops
