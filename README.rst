@@ -72,6 +72,7 @@ build api reference
 
 .. code:: bash
 
+    pip install -r docs/requirements.txt
     make docs
 
 .. |build-status-image| image:: https://secure.travis-ci.org/arve0/leicaautomator.png?branch=master
