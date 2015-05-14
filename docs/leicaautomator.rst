@@ -17,6 +17,14 @@ leicaautomator.automator module
     :undoc-members:
     :show-inheritance:
 
+leicaautomator.utils module
+---------------------------
+
+.. automodule:: leicaautomator.utils
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 leicaautomator.viewer module
 ----------------------------
 

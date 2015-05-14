@@ -2,7 +2,7 @@
 scikit-image viewer plugins and widgets.
 """
 from skimage import viewer, draw, filters, exposure, measure, color, morphology
-from skimage.measure._regionprops import _RegionProperties as RegionProperties
+from skimage.measure._regionprops import _RegionProperties
 
 import scipy.ndimage as nd
 import numpy as np
@@ -491,7 +491,7 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
             self.region_plugin.labels[slice_] = label
 
             # add region
-            r = RegionProperties(slice_, label, self.region_plugin.labels,
+            r = _RegionProperties(slice_, label, self.region_plugin.labels,
                                  intensity_image=None, cache_active=False)
             r.y, r.x = r.centroid
             r.x -= width

@@ -23,7 +23,13 @@ parent = os.path.dirname(cwd)
 sys.path.insert(0, parent)
 
 
-MOCK_MODULES = ['numpy', 'scipy', 'scipy.ndimage', 'matplotlib', 'skimage',
+MOCK_MODULES = ['numpy',
+                'scipy',
+                'scipy.ndimage',
+                'matplotlib',
+                'matplotlib.patches',
+                'skimage',
+                'skimage.measure._regionprops',
                 'leicascanningtemplate']
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
