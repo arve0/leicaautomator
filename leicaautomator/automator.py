@@ -29,104 +29,101 @@
 from skimage import io, transform
 from .viewer import *
 from leicascanningtemplate import ScanningTemplate
+from microscopestitching import stitch, ImageCollection
+from leicaexperiment import Experiment, attributes
 import numpy as np
+from warnings import warn, filterwarnings, catch_warnings
 
-def find_spots(experiment):
-    """Finds spots and return position of them in a list.
+
+def find_tma_regions(image):
+    """Find tissue micro array regions in an overview scan. Opens a GUI
+    which allows for adjusting filter settings and move, remove or add
+    regions by mouse clicks.
 
     Parameters
     ----------
-    experiment : leicaexperiment.Experiment
-        Matrix Screener experiment to search for spots. Its assumed that the
-        experiment contain a single well. If it contain several wells, only
-        the first well will be searched for spots.
+    image : 2d array
+        Overview image to look for tissue samples.
 
     Returns
     -------
-    list of regions from skimage.measure.regionprops
-        Regions have these extra attributes:
+    skimage.measure.regionprops
+        List of regions with the extra attributes:
 
-        - ``real_x`` : ``x`` in meters.
-        - ``real_y`` : ``y`` in meters.
         - ``x``, ``y``, ``x_end``, ``y_end`` : same as ``bbox``.
-        - ``well_x`` : well x coordinate, from 0.
-        - ``well_y`` : well y coordinate, from 0.
+        - ``well_x`` : column coordinate, 0-indexed.
+        - ``well_y`` : row coordinate, 0-indexed.
     """
-    stitched = experiment.stitched
-    if not len(stitched):
-        # try stitching
-        stitched = experiment.stitch()
-        if not len(stitched):
-            return []
+    if type(image) is str:
+        image = io.imread(image)
 
-    img_path = stitched[0]
-    img = io.imread(img_path)
-
-    # # resize for performance
-    # max_size = 4096
-    # x,y = img.shape
-    # factor = x / max_size
-    # if factor > 1:
-    #     new_x = round(x/factor)
-    #     new_y = round(y/factor)
-    #     img = transform.resize(img, (new_x, new_y))
+    viewer = ImageViewer(image)
+    viewer += PopBilateralPlugin()
+    viewer += MeanPlugin()
+    viewer += OtsuPlugin()
+    viewer += RegionPlugin()
+    return viewer.show()[-1] # output of RegionPlugin
 
 
+def stitch(experiment):
+    if type(experiment) == str:
+        experiment = Experiment(experiment)
+
+    images = []
+    for i in experiment.images:
+        attr = attributes(i)
+        if attr.u != 0 or attr.v != 0:
+            warn('experiment have several wells, assuming top left well')
+            continue
+        images.append((i, attr.y, attr.x))
+
+    ic = ImageCollection(images)
+    with catch_warnings():
+        filterwarnings("ignore")
+        stitched = stitch(ic)
+
+    return stitched
+
+    
+
+def set_stage_position(regions, scanning_template):
+    """
+    Parameters
+    ----------
+    regions : list of skimage.measure.regionprops
+    scanning_template : str or ScanningTemplate
+        Scanning template to the scan where the regions was found.
+    """
     ##
-    # Position of pixel 0,0
+    # Position of center pixel
     ##
     tmpl_path = experiment.scanning_template
     tmpl = ScanningTemplate(tmpl_path)
     field = tmpl.field(1, 1, 1, 1) # first field in first well
-    # in meters
-    x_start = field.FieldXCoordinate
-    y_start = field.FieldYCoordinate
-
-    # coordinates in pixels from TileConfiguration.registered.txt
-    stitch_coord = experiment.stitch_coordinates(0,0)
-    xmin = min(stitch_coord[0])
-    ymin = min(stitch_coord[1])
-
-    # pixel size in microns
-    # http://www.openmicroscopy.org/site/support/ome-model/specifications/
-    metadata = experiment.field_metadata()
-    x_px_size = float(metadata.Image.Pixels.attrib['PhysicalSizeX'])*1e-6
-    y_px_size = float(metadata.Image.Pixels.attrib['PhysicalSizeY'])*1e-6
-
-    # if factor > 1:
-    #     x_px_size *= factor
-    #     y_px_size *= factor
-
-    # adjust in case first field is not placed at 0,0
-    # in meters
-    real_x_start = x_start + xmin*x_px_size
-    real_y_start = y_start + ymin*y_px_size
-
+    y_center = field.FieldYCoordinate # in meters
+    x_center = field.FieldXCoordinate
 
     ##
-    # Find spots with different kind of filters
+    # pixel size
     ##
-    viewer = ImageViewer(img)
-    #viewer += CropPlugin()
-    #viewer += EntropyPlugin()
-    viewer += PopBilateralPlugin()
-    viewer += MeanPlugin()
-    # Li threshold gives lower threshold values then Otsu
-    #viewer += LiThresholdPlugin()
-    viewer += OtsuPlugin()
-    #viewer += ErosionPlugin()
-    #viewer += DilationPlugin()
-    #viewer += MinimumAreaPlugin()
-    #viewer += FillHolesPlugin()
-    #viewer += LabelPlugin()
-    viewer += RegionPlugin()
-    # regions is a list of skimage.measure.regionprops
-    labels, regions = viewer.show()[-1] # output of last plugin
+    y_distance = tmpl.properties.ScanFieldStageDistanceY * 1e-6 # in microns - DAMN IT LEICA!"#$%
+    x_distance = tmpl.properties.ScanFieldStageDistanceX * 1e-6
 
+    img_shape = io.imread(experiment.images[0]).shape
+    yoffset, xoffset = ic.median_translation()
 
+    # do not trust reported px size in TIF metadata
+    y_px_size = y_distance / (img_shape[0] + yoffset)
+    x_px_size = x_distance / (img_shape[1] + xoffset)
+
+    ##
+    # top left pixel position
+    ##
+    y_start = y_center - img_shape[0]//2 * y_px_size
+    x_start = x_center - img_shape[1]//2 * x_px_size
     for region in regions:
-        region.real_x = real_x_start + region.x*x_px_size
-        region.real_y = real_y_start + region.y*y_px_size
+        region.real_x = x_start + region.x*x_px_size
+        region.real_y = y_start + region.y*y_px_size
 
     x_wells = sorted(set(r.well_x for r in regions))
     y_wells = sorted(set(r.well_y for r in regions))
@@ -151,6 +148,10 @@ def find_spots(experiment):
     print('Well distance x in microns:', str(dx*1e6))
     print('Well distance y in microns:', str(dy*1e6))
 
+    return regions
+
+
+def print_offsets(regions):
     # print offsets
     first_x, first_y = next(((r.real_x, r.real_y) for r in regions
                             if r.well_x == 0 and r.well_y == 0), None)
@@ -171,7 +172,7 @@ def find_spots(experiment):
         if abs(offset_x) > 10 or abs(offset_y) > 1:
             print('(%2d, %2d)   %5d, %5d' % (r.well_x, r.well_y, offset_x, offset_y))
 
-    return labels, regions
+    
 
 
 def get_x_median(regions, x):

@@ -356,12 +356,12 @@ class RegionPlugin(EnablePlugin):
 
 
     def set_well_positions(self):
-        """Set property well_x/y on region.
+        """Set property well_x/y on region. TODO: move to submodule.
 
         Returns
         -------
         list of skimage.regionprops
-            Regions with extra property ``well_x`` and ``well_y`` set.
+            Regions with extra property ``well_x`` and ``well_y`` set (0-indexed).
         """
         for direction in ['x', 'y']:
             regions = sorted(self.regions, key=lambda r: getattr(r, direction))
@@ -412,7 +412,7 @@ class RegionPlugin(EnablePlugin):
 
 
     def output(self):
-        return (self.labels, self.regions)
+        return self.regions
 
 ##
 # Helper functions
