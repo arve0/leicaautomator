@@ -3,6 +3,7 @@ import numpy
 import pickle
 import zlib
 from io import StringIO
+from operator import attrgetter
 
 from math import ceil
 from multiprocessing import cpu_count
@@ -43,6 +44,58 @@ def save_regions(regions, filename):
 
 def flatten(iterable):
     return [x for sub in iterable for x in sub]
+
+
+def zick_zack_sort(list_, sortby):
+    """
+    Example
+    -------
+    > class R:
+    > def __init__(self, x, y):
+    >     self.x = x
+    >     self.y = y
+    > def __repr__(self):
+    >     return "R(%s,%s)" % (self.x, self.y)
+    > regions = [R(1,1), R(1,2), R(1,3), R(2,1), R(2,2), R(2,3), R(3,1), R(3,2), R(3,3)]
+    > zick_zack_sort(regions, ('y', 'x'))
+    [R(1,1), R(2,1), R(3,1), R(3,2), R(2,2), R(1,2), R(1,3), R(2,3), R(3,3)]
+
+    Parameters
+    ----------
+    list_ : list
+        List of objects to sort.
+    sortby : iterable
+        Attributes in object to sort by.
+
+    Returns
+    -------
+    list
+        Sorted in zick zack.
+    """
+    if type(sortby) is str:
+        sortby = (sortby,)
+
+    list_.sort(key=attrgetter(*sortby))
+    
+    firstgetter = attrgetter(sortby[0])
+    prev = firstgetter(list_[0])
+
+    out = []
+    revert = False
+    for i in list_:
+        cur = firstgetter(i)
+        if not revert and cur != prev:
+            revert = True
+            part = []
+        elif revert and cur != prev:
+            out.extend(part[::-1])
+            revert = False
+        if revert:
+            part.append(i)
+        if not revert:
+            out.append(i)
+        prev = cur
+    return out
 
 
 def _get_chunks(shape, ncpu):
