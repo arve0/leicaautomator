@@ -31,7 +31,10 @@ setup(
         'scikit-image',
         'leicascanningtemplate',
         'leicacam',
-        'leicaexperiment'
+        'leicaexperiment',
+        'microscopestitching',
+        'dask[bag]',
+        'numba',
     ],
     license='MIT',
     zip_safe=False,

@@ -1,0 +1,7 @@
+numba
+scipy
+numpy
+matplotlib
+scikit-image
+numba
+lxml

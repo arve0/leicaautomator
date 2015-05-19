@@ -4,6 +4,9 @@ scikit-image viewer plugins and widgets.
 from skimage import viewer, draw, filters, exposure, measure, color, morphology
 from skimage.measure._regionprops import _RegionProperties
 
+from .filters import pop_bilateral, mean
+from .utils import apply_chunks
+
 import scipy.ndimage as nd
 import numpy as np
 from matplotlib.patches import Polygon
@@ -73,6 +76,16 @@ class SeriesPlugin(viewer.plugins.Plugin):
         #self.filter_image()
 
 
+    def display_filtered_image(self, img):
+        if img.shape[0] > 2048: # TODO: find screen resolution by Qt
+            factor = img.shape[0] // 2048
+        else:
+            factor = 1
+        self.view_factor = factor
+        self.image_viewer.view_factor = factor
+        self.image_viewer.image = img[::factor, ::factor]
+
+
 class EnablePlugin(SeriesPlugin):
     "Plugin with checkbox for enable/disable"
     def __init__(self, **kwargs):
@@ -112,11 +125,11 @@ class SelemPlugin(EnablePlugin):
     selem_size = 3
     def __init__(self, **kwargs):
         super(SelemPlugin, self).__init__(**kwargs)
-        size = viewer.widgets.Slider('selem', low=1, high=10,
+        self.size = viewer.widgets.Slider('selem', low=3, high=21,
             value=self.selem_size, value_type='int', ptype='plugin',
             update_on='release')
-        self.add_widget(size)
-        size.callback = self.update_selem
+        self.add_widget(self.size)
+        self.size.callback = self.update_selem
         self.keyword_arguments['selem'] = morphology.square(self.selem_size)
 
     def update_selem(self, name, value):
@@ -171,8 +184,11 @@ class PopBilateralPlugin(SelemPlugin):
         self.add_widget(self.s1)
 
     def image_filter(self, img, **kwargs):
-        filtered = filters.rank.pop_bilateral(img, **kwargs)
-        return exposure.rescale_intensity(-filtered)
+        filtered = apply_chunks(pop_bilateral, img, depth=self.size.val//2, extra_keywords=kwargs)
+        filtered -= filtered.min()
+        factor = 255 / filtered.max()
+        filtered *= factor
+        return filtered
 
 
 class MeanPlugin(SelemPlugin):
@@ -180,7 +196,7 @@ class MeanPlugin(SelemPlugin):
     selem_size = 9
 
     def image_filter(self, img, **kwargs):
-        return filters.rank.mean(img, **kwargs)
+        return apply_chunks(mean, img, depth=self.size.val//2, extra_keywords=kwargs)
 
 
 class OtsuPlugin(EnablePlugin):
@@ -338,7 +354,7 @@ class RegionPlugin(EnablePlugin):
             return
 
         for region in self.regions:
-            region = create_polygon(region)
+            region = create_polygon(region, self.view_factor)
 
 
     def display_filtered_image(self, image):
@@ -346,7 +362,7 @@ class RegionPlugin(EnablePlugin):
         ax = self.image_viewer.ax
 
         # set image and add polygons if called with args
-        self.image_viewer.image = image
+        super(RegionPlugin, self).display_filtered_image(image)
 
         if self.enabled:
             for r in self.regions:
@@ -399,10 +415,11 @@ class RegionPlugin(EnablePlugin):
     def set_texts(self):
         "create _text property of well positions"
         ax = self.image_viewer.ax
+        factor = self.view_factor
         for r in self.regions:
             text = '%s,%s' % (r.well_x+1, r.well_y+1) # (1,1) top left
-            x = r.x + (r.x_end - r.x) / 4
-            y = r.y_end - (r.y_end - r.y) / 3
+            x = (r.x + (r.x_end - r.x) / 4) / factor
+            y = (r.y_end - (r.y_end - r.y) / 3) / factor
             try:
                 r._text.set_text(text)
                 r._text.set_position((x, y))
@@ -417,9 +434,10 @@ class RegionPlugin(EnablePlugin):
 ##
 # Helper functions
 ##
-def create_polygon(r):
-    r.vertices = ((r.x, r.y), (r.x, r.y_end),
+def create_polygon(r, view_factor):
+    vertices = ((r.x, r.y), (r.x, r.y_end),
                   (r.x_end, r.y_end), (r.x_end, r.y))
+    r.vertices = [(v[0]/view_factor, v[1]/view_factor) for v in vertices]
     r._polygon = Polygon(r.vertices, fill=False, edgecolor='y', linewidth=2)
     return r
 
@@ -453,6 +471,7 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
 
     http://matplotlib.org/users/event_handling.html#draggable-rectangle-exercise
     """
+    # TODO: debug moving, deleting, adding (factor)
     def __init__(self, image_viewer, region_plugin):
         super(MoveRegion, self).__init__(image_viewer)
         self.region_plugin = region_plugin
@@ -500,7 +519,7 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
             r.x_end = r.x + 2*width
             r.y_end = r.y + 2*width
 
-            r = create_polygon(r)
+            r = create_polygon(r, self.image_viewer.view_factor)
             self.ax.add_patch(r._polygon)
             self.region_plugin.regions.append(r)
             self.region_plugin.set_well_positions()
