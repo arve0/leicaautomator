@@ -185,6 +185,7 @@ class PopBilateralPlugin(SelemPlugin):
 
     def image_filter(self, img, **kwargs):
         filtered = apply_chunks(pop_bilateral, img, depth=self.size.val//2, extra_keywords=kwargs)
+        filtered = self.size.val**2 - filtered # invert
         filtered -= filtered.min()
         factor = 255 / filtered.max()
         filtered *= factor
