@@ -106,7 +106,7 @@ def _mean(img, selem_size, rows, out):
         for j in range(ix):
             for ii in range(selem_size):
                 rows[i, j] += img[i+ii, j]
-    # 2n instead of 2^2
+    # 2n instead of n^2
     for i in range(iy-2*pad):
         for j in range(ix-2*pad):
             o = 0
