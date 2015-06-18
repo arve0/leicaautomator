@@ -373,7 +373,7 @@ class RegionPlugin(EnablePlugin):
 
 
     def set_well_positions(self):
-        """Set property well_x/y on region. TODO: move to submodule.
+        """Set property well_x/y on region.
 
         Returns
         -------
@@ -472,7 +472,6 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
 
     http://matplotlib.org/users/event_handling.html#draggable-rectangle-exercise
     """
-    # TODO: debug moving, deleting, adding (factor)
     def __init__(self, image_viewer, region_plugin):
         super(MoveRegion, self).__init__(image_viewer)
         self.region_plugin = region_plugin
@@ -482,8 +481,8 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
     def on_mouse_press(self, event):
         if not event.xdata or not event.ydata:
             return
-        x = int(event.xdata)
-        y = int(event.ydata)
+        x = int(event.xdata * self.viewer.view_factor)
+        y = int(event.ydata * self.viewer.view_factor)
         # store position, for calculation dx/dy
         self.x = x
         self.y = y
@@ -497,6 +496,11 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
             self.region_plugin.regions.remove(self.region)
             self.region._polygon.remove()
             self.region._text.remove()
+
+            # recalculate well positions
+            self.region_plugin.set_well_positions()
+            self.region_plugin.set_texts()
+
             self.canvas.draw()
             self.region = None
             return
@@ -520,7 +524,7 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
             r.x_end = r.x + 2*width
             r.y_end = r.y + 2*width
 
-            r = create_polygon(r, self.image_viewer.view_factor)
+            r = create_polygon(r, self.viewer.view_factor)
             self.ax.add_patch(r._polygon)
             self.region_plugin.regions.append(r)
             self.region_plugin.set_well_positions()
@@ -538,13 +542,14 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
             return
         if not self.region:
             return
-        x = int(event.xdata)
-        y = int(event.ydata)
+        f = self.viewer.view_factor
+        x = int(event.xdata * f)
+        y = int(event.ydata * f)
         dx = x - self.x
         dy = y - self.y
         if dx == 0 and dy == 0:
             return
-        vertices = [(v[0]+dx, v[1]+dy) for v in self.region.vertices]
+        vertices = [(v[0]+dx/f, v[1]+dy/f) for v in self.region.vertices]
         self.region._polygon.set_xy(vertices)
         # draw
         self.canvas.restore_region(self.background)
@@ -554,14 +559,15 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
     def on_mouse_release(self, event):
         if not self.region:
             return
-        x = int(event.xdata)
-        y = int(event.ydata)
+        f = self.viewer.view_factor
+        x = int(event.xdata * f)
+        y = int(event.ydata * f)
         dx = x - self.x
         dy = y - self.y
         if dx == 0 and dy == 0:
             # on release first click in double click
             return
-        vertices = [(v[0]+dx, v[1]+dy) for v in self.region.vertices]
+        vertices = [(v[0]+dx/f, v[1]+dy/f) for v in self.region.vertices]
         self.region._polygon.set_xy(vertices)
         self.region.vertices = vertices
         self.region.x += dx
