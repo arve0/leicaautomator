@@ -1,4 +1,7 @@
 wheel>=0.22
+-U pip setuptools
+-U virtualenv # make sure latest pip is bundled in tox venv (pip wheel cache)
+tox
 
 scikit-image==0.11.3 # stable of skimage when developed
 -e .
