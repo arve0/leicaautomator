@@ -1,14 +1,8 @@
 """
 Finds tissue micro arrays in an overview image and scan those regions.
 """
-from skimage import io, transform
+from skimage import io
 from .viewer import *
-from leicascanningtemplate import ScanningTemplate
-from microscopestitching import stitch as mstitch
-from microscopestitching import ImageCollection
-from leicaexperiment import Experiment, attributes
-import numpy as np
-from warnings import warn, filterwarnings, catch_warnings
 
 
 def find_tma_regions(image):
@@ -41,21 +35,3 @@ def find_tma_regions(image):
     return viewer.show()[-1] # output of RegionPlugin
 
 
-def stitch(experiment):
-    if type(experiment) == str:
-        experiment = Experiment(experiment)
-
-    images = []
-    for i in experiment.images:
-        attr = attributes(i)
-        if attr.u != 0 or attr.v != 0:
-            warn('experiment have several wells, assuming top left well')
-            continue
-        images.append((i, attr.y, attr.x))
-
-    ic = ImageCollection(images)
-    with catch_warnings():
-        filterwarnings("ignore")
-        stitched = mstitch(ic)
-
-    return stitched
