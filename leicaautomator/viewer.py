@@ -478,6 +478,7 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
         self.region = None # selected region
         self.canvas = self.viewer.canvas
 
+
     def on_mouse_press(self, event):
         if not event.xdata or not event.ydata:
             return
@@ -492,8 +493,9 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
                             if x >= r.x and x <= r.x_end and
                             y >= r.y and y <= r.y_end), None)
         if event.dblclick and self.region:
-            # remove
-            self.region_plugin.regions.remove(self.region)
+            # remove (faster than list.remove)
+            self.region_plugin.regions = [r for r in self.region_plugin.regions
+                                          if r.label != self.region.label]
             self.region._polygon.remove()
             self.region._text.remove()
 
@@ -531,11 +533,14 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
             self.region_plugin.set_texts()
             self.ax.draw_artist(r._polygon)
             self.ax.draw_artist(r._text)
-            self.canvas.blit(self.ax.bbox)
+            self.canvas.draw()
+            self.region = None
             return
+
         elif self.region:
             self.region._polygon.set_animated(True)
             self.background = self.canvas.copy_from_bbox(self.ax.bbox)
+
 
     def on_move(self, event):
         if not event.xdata or not event.ydata:
@@ -555,6 +560,7 @@ class MoveRegion(viewer.canvastools.base.CanvasToolBase):
         self.canvas.restore_region(self.background)
         self.ax.draw_artist(self.region._polygon)
         self.canvas.blit(self.ax.bbox)
+
 
     def on_mouse_release(self, event):
         if not self.region:
