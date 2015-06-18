@@ -5,6 +5,10 @@ import zlib
 from io import StringIO
 from operator import attrgetter
 
+from microscopestitching import stitch as mstitch
+from leicaexperiment import Experiment, attributes
+from warnings import warn, filterwarnings, catch_warnings
+
 from math import ceil
 from multiprocessing import cpu_count
 import dask.array as da
@@ -31,15 +35,12 @@ def _get(region):
     return r
 
 
-def save_regions(regions, filename):
+def save_regions(filename, regions):
     "Save regions as compressed (gzip) pickle."
-    with open(filename, 'w') as fp:
-        s = StringIO
-        json.dump(regions, s)
-        s.seek(0)
-        zlib.compress(s.read())
-        s.seek(0)
-        fp.write(s.read())
+    with open(filename, 'wb') as f:
+        out = pickle.dumps(regions)
+        out = zlib.compress(out)
+        f.write(out)
 
 
 def flatten(iterable):
@@ -179,3 +180,34 @@ def apply_chunks(function, array, chunks=None, depth=0, mode=None,
 
     darr = da.from_array(array, chunks=chunks)
     return darr.map_overlap(wrapped_func, depth, boundary=mode).compute()
+
+
+def stitch(experiment):
+    """Stitch experiment.
+
+    Parameters
+    ----------
+    experiment : leicaexperiment.Experiment
+
+    Returns
+    -------
+    ndarray, offset
+        Stitched image and registered offset.
+    """
+    if type(experiment) == str:
+        experiment = Experiment(experiment)
+
+    images = []
+    for i in experiment.images:
+        attr = attributes(i)
+        if attr.u != 0 or attr.v != 0:
+            warn('experiment have several wells, assuming top left well')
+            continue
+        images.append((i, attr.y, attr.x))
+
+    with catch_warnings():
+        filterwarnings("ignore")
+        stitched = mstitch(images)
+
+    return stitched
+
