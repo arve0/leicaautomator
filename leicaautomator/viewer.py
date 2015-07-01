@@ -4,7 +4,9 @@ scikit-image viewer plugins and widgets.
 from skimage import viewer, draw, filters, exposure, measure, color, morphology
 from skimage.measure._regionprops import _RegionProperties
 
-from .filters import pop_bilateral, mean
+#from .filters import pop_bilateral, mean
+from .filters import mean
+from skimage.filters.rank import pop_bilateral
 from .utils import apply_chunks
 
 import scipy.ndimage as nd

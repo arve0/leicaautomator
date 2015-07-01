@@ -4,6 +4,7 @@ Conversion between stage coordinate system and image pixels.
 
 from leicascanningtemplate import ScanningTemplate
 import numpy as np
+from skimage import io
 
 
 def construct_stage_position(experiment, offset):
@@ -45,7 +46,7 @@ def construct_stage_position(experiment, offset):
 
     def stage_position(y, x):
         """Get stage position by pixel coordinate.
-        
+
         Parameters
         ----------
         y : int
