@@ -64,6 +64,6 @@ make docs
 
 [build-status-image]: https://secure.travis-ci.org/arve0/leicaautomator.png?branch=master
 [travis]: http://travis-ci.org/arve0/leicaautomator?branch=master
-[pypi-version]: https://pypip.in/version/leicaautomator/badge.svg
+[pypi-version]: https://img.shields.io/pypi/v/leicaautomator.svg
 [pypi]: https://pypi.python.org/pypi/leicaautomator
-[wheel]: https://pypip.in/wheel/leicaautomator/badge.svg
+[wheel]: https://img.shields.io/pypi/wheel/leicaautomator.svg
